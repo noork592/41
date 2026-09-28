@@ -7993,9 +7993,39 @@ async def delete_flyover(fid: str, _user=Depends(get_current_user)):
 
 
 
+class FactoryLocationIn(BaseModel):
+    lat: float
+    lng: float
+    label: Optional[str] = None
+
+
+async def _get_factory() -> Dict[str, Any]:
+    """Current route start point (factory). Editable & stored in db.app_config
+    under key 'factory_location'; falls back to the FACTORY_LOCATION default."""
+    doc = await db.app_config.find_one({"key": "factory_location"}, {"_id": 0})
+    if doc and "lat" in doc and "lng" in doc:
+        return {
+            "lat": float(doc["lat"]),
+            "lng": float(doc["lng"]),
+            "label": doc.get("label") or FACTORY_LOCATION["label"],
+        }
+    return dict(FACTORY_LOCATION)
+
+
 @api_router.get("/transport/factory")
 async def transport_factory(_user=Depends(get_current_user)):
-    return FACTORY_LOCATION
+    return await _get_factory()
+
+
+@api_router.put("/transport/factory")
+async def update_transport_factory(body: FactoryLocationIn, _user=Depends(get_current_user)):
+    if not (-90 <= body.lat <= 90) or not (-180 <= body.lng <= 180):
+        raise HTTPException(status_code=400, detail="Coordinates are out of range")
+    label = (body.label or FACTORY_LOCATION["label"]).strip() or FACTORY_LOCATION["label"]
+    doc = {"key": "factory_location", "lat": float(body.lat), "lng": float(body.lng),
+           "label": label, "updated_at": now_iso()}
+    await db.app_config.update_one({"key": "factory_location"}, {"$set": doc}, upsert=True)
+    return {"lat": doc["lat"], "lng": doc["lng"], "label": doc["label"]}
 
 
 # ── Transports master (name + coordinates) ────────────────────────────────
@@ -8737,7 +8767,8 @@ async def transport_optimize(body: OptimizeIn, _user=Depends(get_current_user)):
     import httpx as _httpx
     from math import radians, sin, cos, asin, sqrt
 
-    factory_ll = (FACTORY_LOCATION["lat"], FACTORY_LOCATION["lng"])
+    factory = await _get_factory()
+    factory_ll = (factory["lat"], factory["lng"])
     pts = [(s.lat, s.lng) for s in stops]
 
     def hav(a, b):
@@ -8748,7 +8779,7 @@ async def transport_optimize(body: OptimizeIn, _user=Depends(get_current_user)):
         return 2 * 6371.0 * asin(sqrt(h))
 
     def _coords_for_order(order: List[int]) -> str:
-        parts = [f"{FACTORY_LOCATION['lng']},{FACTORY_LOCATION['lat']}"]
+        parts = [f"{factory_ll[1]},{factory_ll[0]}"]
         parts += [f"{stops[i].lng},{stops[i].lat}" for i in order]
         return ";".join(parts)
 

@@ -108,6 +108,25 @@ user_problem_statement: |
   Fix so the avoid option truly avoids crossing the rail line.
 
 backend:
+  - task: "Editable route start point (factory location)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          Added editable factory/start location. GET /api/transport/factory now reads from db.app_config
+          (key 'factory_location') with fallback to the FACTORY_LOCATION default. New PUT /api/transport/factory
+          {lat,lng,label} upserts it (validates coord range -> 400 on bad). transport_optimize now uses
+          _get_factory() as the origin instead of the hardcoded constant.
+          TEST: admin/admin123. (1) GET returns default {lat,lng,label}. (2) PUT with new lat/lng -> 200 echoes
+          new values; GET reflects them. (3) PUT invalid {lat:200} -> 400. (4) POST /api/transport/optimize with
+          fixed stops before vs after moving the start FAR AWAY -> total_distance_km changes (origin honored).
+          CLEANUP: revert factory to lat 30.8978257, lng 75.8528076, label "JK Products Factory".
   - task: "User-marked flyovers CRUD endpoints"
     implemented: true
     working: true

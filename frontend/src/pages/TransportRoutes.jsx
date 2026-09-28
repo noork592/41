@@ -231,6 +231,7 @@ export default function TransportRoutes() {
   const [phatakMode, setPhatakMode] = useState(false);
   const [flyovers, setFlyovers] = useState([]);          // user-marked flyovers / ROBs
   const [flyoverMode, setFlyoverMode] = useState(false);
+  const [factoryMode, setFactoryMode] = useState(false); // set route start point (factory)
   const [busy, setBusy] = useState({ adding: false, optimizing: false, saving: false });
   const [result, setResult] = useState(null);            // {order, total_distance_km, total_duration_min, geometry, engine}
   const [mapStyle, setMapStyle] = useState("map");
@@ -482,6 +483,18 @@ export default function TransportRoutes() {
       toast.success("Flyover removed.");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Delete failed");
+    }
+  };
+
+  // Change the route START POINT (factory location). Saved to the backend and
+  // used as the origin for every optimised route.
+  const setFactoryLocation = async (lat, lng) => {
+    try {
+      const r = await api.put("/transport/factory", { lat, lng, label: factory.label || "JK Products Factory" });
+      setFactory(r.data);
+      toast.success("Start point updated. Route ab yahan se banega.");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not update start point");
     }
   };
 
@@ -961,6 +974,15 @@ export default function TransportRoutes() {
           >
             <Milestone className="w-3.5 h-3.5" /> {flyoverMode ? "Click flyover on map…" : "Mark flyover"}
           </button>
+          <button
+            type="button"
+            onClick={() => { setFactoryMode((v) => !v); setPickMode(false); setPhatakMode(false); setFlyoverMode(false); }}
+            className={`inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded-sm border ${factoryMode ? "bg-[#111827] text-white border-[#111827]" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}`}
+            data-testid="tr-factory-mode"
+            title="Route ka start point (factory) badlein — map par nayi location par click karein"
+          >
+            <Crosshair className="w-3.5 h-3.5" /> {factoryMode ? "Click start point on map…" : "Set start point"}
+          </button>
           <div className="ml-auto inline-flex rounded-sm border border-slate-200 overflow-hidden">
             <button
               type="button" onClick={() => setMapStyle("map")}
@@ -982,7 +1004,7 @@ export default function TransportRoutes() {
           <MapContainer
             center={[factory.lat, factory.lng]}
             zoom={10}
-            style={{ height: "100%", width: "100%", cursor: pickMode || phatakMode || flyoverMode ? "crosshair" : "" }}
+            style={{ height: "100%", width: "100%", cursor: pickMode || phatakMode || flyoverMode || factoryMode ? "crosshair" : "" }}
             scrollWheelZoom
           >
             {mapStyle === "map" ? (
@@ -1008,7 +1030,7 @@ export default function TransportRoutes() {
               </>
             )}
             <ClickToPick
-              enabled={pickMode || phatakMode || flyoverMode}
+              enabled={pickMode || phatakMode || flyoverMode || factoryMode}
               onPick={({ lat, lng }) => {
                 if (phatakMode) {
                   addPhatak(lat, lng);
@@ -1018,6 +1040,11 @@ export default function TransportRoutes() {
                   addFlyover(lat, lng);
                   return;
                 }
+                if (factoryMode) {
+                  setFactoryLocation(lat, lng);
+                  setFactoryMode(false);
+                  return;
+                }
                 setDraft((d) => ({ ...d, lat: lat.toFixed(6), lng: lng.toFixed(6) }));
                 setPickMode(false);
                 toast.success("Coordinates captured — give it a name and Add.");
@@ -1025,7 +1052,13 @@ export default function TransportRoutes() {
             />
 
             <Marker position={[factory.lat, factory.lng]} icon={factoryIcon}>
-              <Popup><b>Factory</b><br />{factory.label}</Popup>
+              <Popup>
+                <b>Start point (Factory)</b><br />{factory.label}<br />
+                <span style={{ fontFamily: "monospace" }}>
+                  {Number(factory.lat).toFixed(5)}, {Number(factory.lng).toFixed(5)}
+                </span><br />
+                <span style={{ color: "#111827" }}>Badalne ke liye "Set start point" par click karein.</span>
+              </Popup>
             </Marker>
 
             {/* User-marked railway phataks (red ✕) — always avoided by the
